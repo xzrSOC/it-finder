@@ -177,8 +177,9 @@ def geocode(location: str):
 @st.cache_data(ttl=3600)
 def fetch_companies(lat, lon, radius_km):
     r = int(radius_km * 1000)
+    # Regex sans \b (non supporté par Overpass) → simplifiée
     query = f"""
-    [out:json][timeout:60];
+    [out:json][timeout:90];
     (
       node["office"="it"](around:{r},{lat},{lon});
       way["office"="it"](around:{r},{lat},{lon});
@@ -190,14 +191,31 @@ def fetch_companies(lat, lon, radius_km):
       way["shop"="computer"](around:{r},{lat},{lon});
       node["office"="telecommunication"](around:{r},{lat},{lon});
       way["office"="telecommunication"](around:{r},{lat},{lon});
-      node["name"~"^.*(\\binformatique\\b|\\bIT\\b|\\bsoftware\\b|\\btechnology\\b|\\btech\\b|\\bdigital\\b|\\bcyber\\b|\\bcloud\\b|\\bESN\\b|\\bSSII\\b|\\bdevops\\b|\\blogiciel\\b).*$",i](around:{r},{lat},{lon});
-      way["name"~"^.*(\\binformatique\\b|\\bIT\\b|\\bsoftware\\b|\\btechnology\\b|\\btech\\b|\\bdigital\\b|\\bcyber\\b|\\bcloud\\b|\\bESN\\b|\\bSSII\\b|\\bdevops\\b|\\blogiciel\\b).*$",i](around:{r},{lat},{lon});
+      node["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});
+      way["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});
     );
     out center;
     """
-    resp = requests.post("https://overpass-api.de/api/interpreter", data=query,
-                         headers={"User-Agent": "IT-Finder-App/2.0"}, timeout=90)
-    return resp.json().get("elements", [])
+    try:
+        resp = requests.post(
+            "https://overpass-api.de/api/interpreter",
+            data={"data": query},
+            headers={"User-Agent": "IT-Finder-App/2.0"},
+            timeout=90
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("elements", [])
+    except requests.exceptions.JSONDecodeError:
+        # Réponse non-JSON (HTML d'erreur Overpass) → retourner liste vide
+        st.warning("⚠️ L'API Overpass a retourné une erreur. Réessayez dans quelques secondes.")
+        return []
+    except requests.exceptions.Timeout:
+        st.warning("⚠️ Timeout : réduisez le rayon ou réessayez plus tard.")
+        return []
+    except Exception as e:
+        st.error(f"❌ Erreur réseau : {e}")
+        return []
 
 IT_KEYWORDS = [
     "informatique","software","technology","technologies"," tech ","digital",
