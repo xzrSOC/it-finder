@@ -181,6 +181,7 @@ def fetch_companies(lat, lon, radius_km):
     lines = [
         "[out:json][timeout:90];",
         "(",
+        # Tags OSM explicitement IT — aucun faux positif possible
         f'node["office"="it"](around:{r},{lat},{lon});',
         f'way["office"="it"](around:{r},{lat},{lon});',
         f'node["office"="computer"](around:{r},{lat},{lon});',
@@ -191,8 +192,10 @@ def fetch_companies(lat, lon, radius_km):
         f'way["shop"="computer"](around:{r},{lat},{lon});',
         f'node["office"="telecommunication"](around:{r},{lat},{lon});',
         f'way["office"="telecommunication"](around:{r},{lat},{lon});',
-        f'node["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});',
-        f'way["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});',
+        # Recherche nom uniquement sur des mots très spécifiques IT
+        # (pas "tech", "digital" qui matchent n'importe quoi)
+        f'node["name"~"informatique|SSII|ESN|infogérance|cybersécurité|infogestion",i](around:{r},{lat},{lon});',
+        f'way["name"~"informatique|SSII|ESN|infogérance|cybersécurité|infogestion",i](around:{r},{lat},{lon});',
         ");",
         "out center;",
     ]
@@ -218,17 +221,48 @@ def fetch_companies(lat, lon, radius_km):
         return []
 
 IT_KEYWORDS = [
-    "informatique","software","technology","technologies"," tech ","digital",
-    "cyber","cybersécurité","cloud","devops","développement","développeur",
-    "système","réseau","network","erp","sap","crm","esn","ssii","logiciel",
-    "progiciel","telecom","télécommunication","infogérance","data","computer",
-    "intelligence artificielle","machine learning","web agency","it services",
+    # Mots 100% spécifiques IT — pas de faux positifs possibles
+    "informatique",
+    "logiciel", "progiciel",
+    "cybersécurité", "cybersecurite", "cyber sécurité",
+    "infogérance", "infogérance", "infogestion",
+    "esn ", " esn", "ssii",
+    "erp ", "sap ", " crm",
+    "intelligence artificielle",
+    "machine learning", "deep learning",
+    "développement logiciel", "développement web",
+    "maintenance informatique", "dépannage informatique",
+    "réseau informatique", "infrastructure informatique",
+    "cloud computing", "hébergement web", "hébergement informatique",
+    "téléphonie ip", "voip",
+    "it services", "it solutions", "it consulting", "managed services",
+    "software house", "software editor",
+    "datacenter", "data center",
 ]
 EXCLUDE = [
-    "restaurant","boulangerie","coiffeur","pharmacie","médecin","dentiste",
-    "garage","immobilier","notaire","avocat","assurance","banque","supermarché",
-    "épicerie","boucherie","église","mosquée","hôtel","bar ","café","pizzeria",
-    "maternelle","lycée","collège","école","salle de sport",
+    # Alimentaire
+    "restaurant","brasserie","boulangerie","pâtisserie","boucherie",
+    "poissonnerie","épicerie","supermarché","traiteur","pizzeria",
+    "kebab","sushi","burger","sandwicherie","snack","friterie",
+    # Beauté / Santé
+    "coiffeur","coiffure","barbier","esthétique","spa","manucure",
+    "pharmacie","médecin","dentiste","kiné","ostéopathe","infirmier",
+    "opticien","audioprothésiste","vétérinaire",
+    # Services pro non-IT
+    "notaire","avocat","huissier","comptable","expert-comptable",
+    "assurance","banque","agence immobilière","immobilier","agence de voyage",
+    # Commerce généraliste
+    "garage","carrosserie","fleuriste","jardinerie","bricolage",
+    "pressing","laverie","cordonnerie","serrurerie","plombier","électricien",
+    # Éducation / Religion / Sport
+    "école","maternelle","primaire","collège","lycée","université",
+    "église","mosquée","temple","synagogue",
+    "salle de sport","fitness","gym","yoga","danse",
+    # Hébergement / Restauration
+    "hôtel","auberge","chambre d'hôtes","gîte",
+    "café","bar ","pub ","discothèque","night-club",
+    # Divers
+    "pompes funèbres","tatouage","piercing",
 ]
 
 def is_it(tags):
@@ -236,14 +270,27 @@ def is_it(tags):
     shop   = tags.get("shop","").lower()
     name   = tags.get("name","").lower()
     desc   = tags.get("description","").lower()
-    text   = f"{name} {desc}"
+    text   = f" {name} {desc} "  # espaces pour éviter les sous-chaînes
+
+    # 1. Exclusion immédiate si secteur non-IT
     if any(e in text for e in EXCLUDE):
         return False
+
+    # 2. Tag OSM explicitement IT → accepté directement
     if office in {"it","computer","software","telecommunication"}:
         return True
     if shop == "computer":
         return True
-    return any(kw in text for kw in IT_KEYWORDS)
+
+    # 3. Vérification stricte par mots-clés longs (min 8 chars)
+    #    évite "net" dans "Benet", "info" dans "Informel", etc.
+    for kw in IT_KEYWORDS:
+        if len(kw.strip()) >= 8 and kw in text:
+            return True
+        elif len(kw.strip()) < 8 and f" {kw.strip()} " in text:
+            return True  # mot court : exiger espaces autour
+
+    return False
 
 def parse_address(tags):
     parts = []
