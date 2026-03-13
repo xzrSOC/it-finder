@@ -321,6 +321,13 @@ with st.sidebar:
                           format="%d km", label_visibility="collapsed")
     st.session_state["radius_m"] = radius_km * 1000
 
+    st.markdown("**📋 Nombre de résultats**")
+    max_results = st.selectbox(
+        "", options=[10, 25, 50, 100],
+        index=1, format_func=lambda x: f"Top {x} entreprises",
+        label_visibility="collapsed"
+    )
+
     search = st.button("🔍  Rechercher")
 
     st.markdown("---")
@@ -381,6 +388,9 @@ else:
 
     companies = process(elements, clat, clon, radius_km)
 
+    # Appliquer la limite de résultats
+    companies = companies[:max_results]
+
     # ── KPIs ──
     total = len(companies)
     zone1 = sum(1 for c in companies if c["Distance_km"] < 5)
@@ -397,7 +407,7 @@ else:
 
     c1, c2, c3, c4 = st.columns(4)
     for col, val, label in [
-        (c1, total,    "Entreprises IT"),
+        (c1, total,    f"Entreprises IT (top {max_results})"),
         (c2, zone1,    "À moins de 5 km"),
         (c3, zone2,    "Entre 5 et 10 km"),
         (c4, with_web, "Avec site web"),
@@ -418,7 +428,7 @@ else:
     # ── TAB MAP ──
     with tab_map:
         st.markdown(f"""<div class='section-title'>
-          Carte — {total} entreprises dans un rayon de {radius_km} km
+          Carte — {total} entreprise{"s" if total > 1 else ""} affichée{"s" if total > 1 else ""} (top {max_results}, rayon {radius_km} km)
         </div>""", unsafe_allow_html=True)
         m = build_map(companies, clat, clon)
         st_folium(m, width="100%", height=520, returned_objects=[])
