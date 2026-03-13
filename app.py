@@ -177,25 +177,26 @@ def geocode(location: str):
 @st.cache_data(ttl=3600)
 def fetch_companies(lat, lon, radius_km):
     r = int(radius_km * 1000)
-    # Regex sans \b (non supporté par Overpass) → simplifiée
-    query = f"""
-    [out:json][timeout:90];
-    (
-      node["office"="it"](around:{r},{lat},{lon});
-      way["office"="it"](around:{r},{lat},{lon});
-      node["office"="computer"](around:{r},{lat},{lon});
-      way["office"="computer"](around:{r},{lat},{lon});
-      node["office"="software"](around:{r},{lat},{lon});
-      way["office"="software"](around:{r},{lat},{lon});
-      node["shop"="computer"](around:{r},{lat},{lon});
-      way["shop"="computer"](around:{r},{lat},{lon});
-      node["office"="telecommunication"](around:{r},{lat},{lon});
-      way["office"="telecommunication"](around:{r},{lat},{lon});
-      node["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});
-      way["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});
-    );
-    out center;
-    """
+    # Requête sans indentation pour éviter "encoding error: whitespace only"
+    lines = [
+        "[out:json][timeout:90];",
+        "(",
+        f'node["office"="it"](around:{r},{lat},{lon});',
+        f'way["office"="it"](around:{r},{lat},{lon});',
+        f'node["office"="computer"](around:{r},{lat},{lon});',
+        f'way["office"="computer"](around:{r},{lat},{lon});',
+        f'node["office"="software"](around:{r},{lat},{lon});',
+        f'way["office"="software"](around:{r},{lat},{lon});',
+        f'node["shop"="computer"](around:{r},{lat},{lon});',
+        f'way["shop"="computer"](around:{r},{lat},{lon});',
+        f'node["office"="telecommunication"](around:{r},{lat},{lon});',
+        f'way["office"="telecommunication"](around:{r},{lat},{lon});',
+        f'node["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});',
+        f'way["name"~"informatique|software|technology|digital|cyber|cloud|devops|logiciel|ESN|SSII",i](around:{r},{lat},{lon});',
+        ");",
+        "out center;",
+    ]
+    query = "\n".join(lines)
     try:
         resp = requests.post(
             "https://overpass-api.de/api/interpreter",
@@ -207,7 +208,6 @@ def fetch_companies(lat, lon, radius_km):
         data = resp.json()
         return data.get("elements", [])
     except requests.exceptions.JSONDecodeError:
-        # Réponse non-JSON (HTML d'erreur Overpass) → retourner liste vide
         st.warning("⚠️ L'API Overpass a retourné une erreur. Réessayez dans quelques secondes.")
         return []
     except requests.exceptions.Timeout:
